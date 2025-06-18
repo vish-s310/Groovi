@@ -10,6 +10,8 @@ class Hangout(db.Model):
     invitee_ids = db.Column(ARRAY(db.Integer), nullable=False) 
     message = db.Column(db.String(255))
     activity = db.Column(db.String(100))
+    time = db.Column(db.String(50))        
+    location = db.Column(db.String(100))    
     status = db.Column(db.String(20), default="pending") 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -20,6 +22,8 @@ class Hangout(db.Model):
             "invitee_ids": self.invitee_ids,
             "message": self.message,
             "activity": self.activity,
+            "time": self.time,
+            "location": self.location,
             "status": self.status,
             "created_at": self.created_at.isoformat()
         }
