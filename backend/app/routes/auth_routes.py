@@ -69,4 +69,5 @@ def update_profile():
     user.profile_pic = profile_pic or user.profile_pic
 
     db.session.commit()
+    add_user_node(user.id, user.name) 
     return jsonify({"message": "Profile updated"}), 200
