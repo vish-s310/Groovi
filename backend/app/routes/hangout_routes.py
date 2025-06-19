@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.models.hangout import Hangout
 from app import db
+from app.graph import create_hangout_node
 
 hangout_bp = Blueprint('hangout', __name__, url_prefix="/hangout")
 
@@ -61,8 +62,11 @@ def respond_hangout():
 def my_hangouts(user_id):
     sent = Hangout.query.filter_by(host_id=user_id).all()
     received = Hangout.query.filter(Hangout.invitee_ids.any(user_id)).all()
+    
+ create_hangout_node(host_id, invitee_ids, activity)
 
     return jsonify({
         "sent": [h.to_dict() for h in sent],
         "received": [h.to_dict() for h in received]
     }), 200
+   
