@@ -38,7 +38,7 @@ def add_primary_friends(user_id, friend_id):
             MERGE (a)-[:FRIEND]->(b)
             MERGE (b)-[:FRIEND]->(a)
         """, user_id=user_id, friend_id=friend_id)
-def is_direct_friend(user_id, target_id):
+def direct_friend(user_id, target_id):
     with driver.session() as session:
         result = session.run("""
             MATCH (a:User {id: $user_id})-[:FRIEND]-(b:User {id: $target_id})
@@ -46,7 +46,7 @@ def is_direct_friend(user_id, target_id):
         """, user_id=user_id, target_id=target_id)
         return result.single()["is_friend"]
 
-def is_second_degree(user_id, target_id):
+def second_degree(user_id, target_id):
     with driver.session() as session:
         result = session.run("""
             MATCH (a:User {id: $user_id})-[:FRIEND]-(common)-[:FRIEND]-(b:User {id: $target_id})
