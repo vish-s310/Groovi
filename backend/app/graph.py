@@ -38,4 +38,35 @@ def add_primary_friends(user_id, friend_id):
             MERGE (a)-[:FRIEND]->(b)
             MERGE (b)-[:FRIEND]->(a)
         """, user_id=user_id, friend_id=friend_id)
+def is_direct_friend(user_id, target_id):
+    with driver.session() as session:
+        result = session.run("""
+            MATCH (a:User {id: $user_id})-[:FRIEND]-(b:User {id: $target_id})
+            RETURN COUNT(*) > 0 AS is_friend
+        """, user_id=user_id, target_id=target_id)
+        return result.single()["is_friend"]
+
+def is_second_degree(user_id, target_id):
+    with driver.session() as session:
+        result = session.run("""
+            MATCH (a:User {id: $user_id})-[:FRIEND]-(common)-[:FRIEND]-(b:User {id: $target_id})
+            WHERE NOT (a)-[:FRIEND]-(b)
+            RETURN COUNT(*) > 0 AS is_second_degree
+        """, user_id=user_id, target_id=target_id)
+        return result.single()["is_second_degree"]
+
+def request_second_degree_approval(user_id, target_id, approver_id):
+    with driver.session() as session:
+        session.run("""
+            MATCH (a:User {id: $user_id}), (b:User {id: $target_id}), (approver:User {id: $approver_id})
+            CREATE (a)-[:PENDING_APPROVAL {by: approver.id}]->(b)
+        """, user_id=user_id, target_id=target_id, approver_id=approver_id)
+
+def approve_second_degree(user_id, target_id):
+    with driver.session() as session:
+        session.run("""
+            MATCH (a:User {id: $user_id})-[r:PENDING_APPROVAL]->(b:User {id: $target_id})
+            DELETE r
+            CREATE (a)-[:APPROVED_SECOND_DEGREE]->(b)
+        """, user_id=user_id, target_id=target_id)
 
