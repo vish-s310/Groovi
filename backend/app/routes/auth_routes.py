@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify
 from app.models.user import User
 from app.models.otp import OTP
 from app import db
-
+from app.graph import add_user_node 
 
 auth_bp = Blueprint('auth', __name__, url_prefix="/auth")
 
@@ -45,8 +45,10 @@ def verify():
     if not user:
         user = User(phone=phone)
         db.session.add(user)
-
-    db.session.commit()
+        db.session.commit()
+        add_user_node(user.id, "") 
+    else:
+        db.session.commit()
     return jsonify({"message": "User verified", "user_id": user.id}), 200
 
 
@@ -67,4 +69,5 @@ def update_profile():
     user.profile_pic = profile_pic or user.profile_pic
 
     db.session.commit()
+    add_user_node(user.id, user.name) 
     return jsonify({"message": "Profile updated"}), 200
