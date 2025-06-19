@@ -2,15 +2,12 @@ import os
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Read Neo4j connection details from environment variables
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "your-password")
 
-# Connect to Neo4j driver
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
 
@@ -33,4 +30,12 @@ def create_hangout_node(host_id, invitee_ids, activity):
             MATCH (invitee:User {id: invitee_id})
             CREATE (invitee)-[:INVITED]->(h)
         """, host_id=host_id, invitee_ids=invitee_ids, activity=activity)
+
+def add_primary_friends(user_id, friend_id):
+    with driver.session() as session:
+        session.run("""
+            MATCH (a:User {id: $user_id}), (b:User {id: $friend_id})
+            MERGE (a)-[:FRIEND]->(b)
+            MERGE (b)-[:FRIEND]->(a)
+        """, user_id=user_id, friend_id=friend_id)
 
