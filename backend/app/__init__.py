@@ -2,6 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
+from app.routes.graph_routes import graph_bp
 import os
 
 db = SQLAlchemy()
@@ -18,6 +19,6 @@ def create_app():
     app.register_blueprint(auth_bp)
     from app.routes.hangout_routes import hangout_bp
     app.register_blueprint(hangout_bp)
-
+    app.register_blueprint(graph_bp)
     return app
 
