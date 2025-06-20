@@ -59,7 +59,7 @@ def request_second_degree_approval(user_id, target_id, approver_id):
     with driver.session() as session:
         session.run("""
             MATCH (a:User {id: $user_id}), (b:User {id: $target_id}), (approver:User {id: $approver_id})
-            CREATE (a)-[:PENDING_APPROVAL {by: approver.id}]->(b)
+            CREATE (a)-[:PENDING_APPROVAL {by: approver_id}]->(b)
         """, user_id=user_id, target_id=target_id, approver_id=approver_id)
 
 def approve_second_degree(user_id, target_id):
@@ -70,3 +70,75 @@ def approve_second_degree(user_id, target_id):
             CREATE (a)-[:APPROVED_SECOND_DEGREE]->(b)
         """, user_id=user_id, target_id=target_id)
 
+def get_mutual_friends(user_id, target_id):
+    """
+    Returns a list of user IDs who are mutual friends of user_id and target_id
+    """
+    with driver.session() as session:
+        result = session.run("""
+            MATCH (a:User {id: $user_id})-[:FRIEND]-(mutual)-[:FRIEND]-(b:User {id: $target_id})
+            RETURN DISTINCT mutual.id AS mutual_id
+        """, user_id=user_id, target_id=target_id)
+
+        return [record["mutual_id"] for record in result]
+
+
+def get_friend_suggestions(user_id):
+    with driver.session() as session:
+        result = session.run("""
+            MATCH (a:User {id: $user_id})-[:FRIEND]-(friend)-[:FRIEND]-(suggested:User)
+            WHERE NOT (a)-[:FRIEND]-(suggested)
+              AND NOT (a)-[:BLOCKED]-(suggested)
+              AND suggested.id <> $user_id
+            RETURN DISTINCT suggested.id AS suggestion_id
+        """, user_id=user_id)
+
+        return [record["suggestion_id"] for record in result]
+
+    
+def block_user(blocker_id, blocked_id):
+    with driver.session() as session:
+        session.run("""
+            MATCH (a:User {id: $blocker_id}), (b:User {id: $blocked_id})
+            MERGE (a)-[:BLOCKED]->(b)
+            WITH a, b
+            MATCH (a)-[f:FRIEND]-(b)
+            DELETE f
+        """, blocker_id=blocker_id, blocked_id=blocked_id)
+def unblock_user(blocker_id, blocked_id):
+    with driver.session() as session:
+        session.run("""
+            MATCH (a:User {id: $blocker_id})-[r:BLOCKED]->(b:User {id: $blocked_id})
+            DELETE r
+        """, blocker_id=blocker_id, blocked_id=blocked_id)
+def degrees_of_separation(user_id, target_id, max_depth=5):
+    """
+    Returns the number of hops (degrees) between two users, or None if not connected
+    """
+    with driver.session() as session:
+        result = session.run("""
+            MATCH (a:User {id: $user_id}), (b:User {id: $target_id}),
+                  path = shortestPath((a)-[:FRIEND*..$max_depth]-(b))
+            RETURN length(path) AS degree
+        """, user_id=user_id, target_id=target_id, max_depth=max_depth)
+
+        record = result.single()
+        return record["degree"] if record else None
+
+def get_pending_approvals(user_id):
+    """
+    Returns a list of users who have pending approval with user_id
+    """
+    with driver.session() as session:
+        result = session.run("""
+            MATCH (:User {id: $user_id})-[r:PENDING_APPROVAL]->(other:User)
+            RETURN other.id AS pending_id
+        """, user_id=user_id)
+        return [record["pending_id"] for record in result]
+def check_approved_second_degree(user_id, target_id):
+    with driver.session() as session:
+        result = session.run("""
+            MATCH (a:User {id: $user_id})-[:APPROVED_SECOND_DEGREE]->(b:User {id: $target_id})
+            RETURN COUNT(*) > 0 AS approved
+        """, user_id=user_id, target_id=target_id)
+        return result.single()["approved"]

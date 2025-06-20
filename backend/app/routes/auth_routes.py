@@ -2,7 +2,7 @@ import random
 from flask import Blueprint, request, jsonify
 from app.models.user import User
 from app.models.otp import OTP
-from app import db
+from app.extensions import db
 from app.graph import add_user_node 
 
 auth_bp = Blueprint('auth', __name__, url_prefix="/auth")
@@ -37,7 +37,7 @@ def verify():
     phone = data.get("phone")
     code = data.get("code")
 
-    otp = OTP.query.filter_by(phone=phone, code=code).order_by(OTP.created_at.desc()).first()
+    otp = OTP.query.filter_by(phone=phone, code=str(code)).order_by(OTP.created_at.desc()).first()
     if not otp or otp.is_expired():
         return jsonify({"error": "Invalid or expired OTP"}), 400
 

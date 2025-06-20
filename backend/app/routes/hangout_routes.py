@@ -1,13 +1,13 @@
 from flask import Blueprint, request, jsonify
 from app.models.hangout import Hangout
-from app import db
+from app.extensions import db
 
 from app.graph import (
     create_hangout_node,
     direct_friend,
     second_degree,
-    check_approved_second_degree,
-    request_second_degree_approval
+    request_second_degree_approval,
+    check_approved_second_degree
 )
 
 hangout_bp = Blueprint('hangout', __name__, url_prefix="/hangout")
