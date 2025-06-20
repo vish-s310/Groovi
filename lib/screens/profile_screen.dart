@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hangout/services/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -48,20 +49,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  void _submitProfile() {
-    if (_nameController.text.isEmpty ||
-        _bioController.text.isEmpty ||
-        _profileImage == null ||
-        _selectedFriends.length != maxFriends) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please complete all fields")),
-      );
-      return;
+void _submitProfile() async {
+  if (_nameController.text.isEmpty ||
+      _bioController.text.isEmpty ||
+      _profileImage == null ||
+      _selectedFriends.length != maxFriends) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Please complete all fields")),
+    );
+    return;
+  }
+
+  try {
+    // 1. Extract current user from route arguments (sent from onboarding)
+    final user = ModalRoute.of(context)?.settings.arguments as Map?;
+    final userId = user?['id'];
+
+    if (userId == null) {
+      throw Exception("User not found");
     }
 
-    // Proceed to next screen (graph screen)
-    Navigator.pushNamed(context, '/graph'); // add this route later
+    // 2. Save profile details
+    await ApiService.updateUserProfile(
+      userId,
+      _nameController.text,
+      _bioController.text,
+    );
+
+    // 3. Select primary friends
+    await ApiService.selectPrimaryFriends(userId, _selectedFriends);
+
+    // TODO: 4. Upload image if backend supports it (skip for now)
+
+    // 5. Navigate to graph screen
+    Navigator.pushNamed(context, '/graph');
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error: ${e.toString()}")),
+    );
   }
+}
+
 
   @override
   Widget build(BuildContext context) {

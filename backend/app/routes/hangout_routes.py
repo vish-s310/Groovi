@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.models.hangout import Hangout
 from app.extensions import db
-
+from app.models.user import User
 from app.graph import (
     create_hangout_node,
     direct_friend,
@@ -97,7 +97,17 @@ def my_hangouts(user_id):
     sent = Hangout.query.filter_by(host_id=user_id).all()
     received = Hangout.query.filter(Hangout.invitee_ids.any(user_id)).all()
 
+    def enrich(hangout):
+        return {
+            **hangout.to_dict(),
+            "host": User.query.get(hangout.host_id).to_dict(),
+            "invitees": [
+                User.query.get(uid).to_dict() for uid in hangout.invitee_ids
+            ]
+        }
+
     return jsonify({
-        "sent": [h.to_dict() for h in sent],
-        "received": [h.to_dict() for h in received]
+        "sent": [enrich(h) for h in sent],
+        "received": [enrich(h) for h in received]
     }), 200
+

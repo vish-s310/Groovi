@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-
+import 'package:hangout/services/api_service.dart';
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -28,17 +28,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  void _verifyOtp() {
-    if (_otpController.text == _mockOtp) {
-      setState(() => _otpVerified = true);
-      // Navigate to profile screen
-      Navigator.pushNamed(context, '/profile');
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Incorrect OTP")));
-    }
+void _verifyOtp() async {
+  if (_otpController.text == _mockOtp) {
+    setState(() => _otpVerified = true);
+
+    // Simulate getting userId from server (for now hardcode or use name)
+    int userId = 42; // TEMP: mock user ID
+
+    // Navigate to profile with userId
+    Navigator.pushNamed(
+      context,
+      '/profile',
+      arguments: {"user_id": userId},
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Incorrect OTP")),
+    );
   }
+}
+
+
 
   @override
   Widget build(BuildContext context) {

@@ -1,49 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:graphview/GraphView.dart';
 import 'package:uuid/uuid.dart';
-import 'package:hangout/models/user_model.dart';
-import 'package:hangout/data/mock_users.dart';
-import 'package:hangout/data/mock_requests.dart' as mock_requests;
-import 'package:hangout/screens/requests_feed_screen.dart' as mock_requests;
+import 'package:hangout/services/api_service.dart';
 
 final uuid = Uuid();
-
-Set<String> approvedCache = {}; // Simulate locally approved 2nd-degree friends
-
-List<AppUser> getConnections(AppUser currentUser) {
-  final firstDegree = allUsers
-      .where((u) => currentUser.firstDegreeIds.contains(u.id))
-      .toList();
-  final Set<String> secondDegreeIds = {};
-
-  for (final f1 in firstDegree) {
-    secondDegreeIds.addAll(f1.firstDegreeIds);
-  }
-
-  secondDegreeIds.remove(currentUser.id);
-  currentUser.firstDegreeIds.forEach(secondDegreeIds.remove);
-
-  final List<AppUser> connections = [];
-
-  for (final user in allUsers) {
-    if (user.id == currentUser.id) continue;
-
-    if (currentUser.firstDegreeIds.contains(user.id)) {
-      connections.add(user.copyWith(status: ConnectionStatus.approved));
-    } else if (secondDegreeIds.contains(user.id)) {
-      final alreadyApproved = approvedCache.contains(user.id);
-      connections.add(
-        user.copyWith(
-          status: alreadyApproved
-              ? ConnectionStatus.approved
-              : ConnectionStatus.pendingApproval,
-        ),
-      );
-    }
-  }
-
-  return connections;
-}
 
 class GraphScreen extends StatefulWidget {
   const GraphScreen({super.key});
@@ -55,66 +15,74 @@ class GraphScreen extends StatefulWidget {
 class _GraphScreenState extends State<GraphScreen> {
   final Graph graph = Graph();
   final BuchheimWalkerConfiguration builder = BuchheimWalkerConfiguration();
-  final Map<String, Node> nodes = {};
+  final Map<int, Node> nodes = {};
+  late int userId;
+  late Map<String, dynamic> currentUser;
+  List<Map<String, dynamic>> approvedFriends = [];
 
   @override
   void initState() {
     super.initState();
-    _buildGraph();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments as Map;
+      userId = args['id'];
+      currentUser = args['user'];
+      _buildGraph();
+    });
   }
 
-  void _buildGraph() {
-    final connections = getConnections(currentUser);
-    final Map<String, AppUser> userMap = {
-      for (var user in connections) user.id: user,
-    };
-    userMap[currentUser.id] = currentUser;
+  Future<void> _buildGraph() async {
+    final suggestions = await ApiService.getFriendSuggestions(userId);
+    final List<Map<String, dynamic>> mutuals = [];
 
-    userMap.forEach((id, user) {
-      nodes[id] = Node.Id(_buildUserNode(user));
-    });
-
-    for (var fid in currentUser.firstDegreeIds) {
-      if (nodes.containsKey(fid)) {
-        graph.addEdge(nodes[currentUser.id]!, nodes[fid]!);
-      }
+    for (var friend in suggestions) {
+      mutuals.add({
+        'user': friend,
+        'mutuals': await ApiService.getMutualFriends(userId, friend['id']),
+      });
     }
 
-    for (var user in connections) {
-      for (var fid in user.firstDegreeIds) {
-        if (nodes.containsKey(fid) &&
-            fid != currentUser.id &&
-            !currentUser.firstDegreeIds.contains(user.id)) {
-          graph.addEdge(nodes[user.id]!, nodes[fid]!);
+    approvedFriends = mutuals
+        .where((entry) => entry['user']['status'] == 'approved')
+        .map((entry) => entry['user'] as Map<String, dynamic>)
+        .toList();
+
+    setState(() {
+      graph.addNode(Node.Id(_buildUserNode(currentUser, isCurrent: true)));
+      for (var entry in mutuals) {
+        final friend = entry['user'];
+        final isApproved = friend['status'] == 'approved';
+        final node = Node.Id(_buildUserNode(friend, isApproved: isApproved));
+        graph.addNode(node);
+        if (isApproved) {
+          graph.addEdge(Node.Id(_buildUserNode(currentUser, isCurrent: true)), node);
         }
       }
-    }
+    });
 
     builder
       ..siblingSeparation = (32)
       ..levelSeparation = (64)
       ..subtreeSeparation = (32)
-      ..orientation = (BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM);
+      ..orientation = BuchheimWalkerConfiguration.ORIENTATION_TOP_BOTTOM;
   }
 
-  Widget _buildUserNode(AppUser user) {
-    Color ringColor;
-    switch (user.status) {
-      case ConnectionStatus.approved:
-        ringColor = Colors.greenAccent;
-        break;
-      case ConnectionStatus.pendingApproval:
-        ringColor = Colors.orangeAccent;
-        break;
-      case ConnectionStatus.none:
-        ringColor = Colors.grey;
-    }
+  Widget _buildUserNode(Map<String, dynamic> user, {bool isCurrent = false, bool isApproved = false}) {
+    Color ringColor = isCurrent
+        ? Colors.blueAccent
+        : isApproved
+            ? Colors.greenAccent
+            : Colors.orangeAccent;
 
     return GestureDetector(
-      onTap: () {
-        if (user.status == ConnectionStatus.pendingApproval) {
-          _requestApproval(user);
-        } else if (user.status == ConnectionStatus.approved) {
+      onTap: () async {
+        if (!isCurrent && !isApproved) {
+          final approved = await _showApprovalDialog(user);
+          if (approved) {
+            await ApiService.approveSecondDegree(userId, user['id']);
+            setState(() => _buildGraph());
+          }
+        } else if (isApproved) {
           _showInviteDialog(user);
         }
       },
@@ -128,14 +96,14 @@ class _GraphScreenState extends State<GraphScreen> {
               border: Border.all(color: ringColor, width: 3),
             ),
             child: CircleAvatar(
-              backgroundImage: NetworkImage(user.imageUrl),
+              backgroundImage: NetworkImage(user['imageUrl'] ?? ''),
               radius: 30,
               backgroundColor: Colors.grey[800],
             ),
           ),
           const SizedBox(height: 6),
           Text(
-            user.name,
+            user['name'] ?? '',
             style: TextStyle(
               fontSize: 12,
               color: ringColor,
@@ -147,96 +115,64 @@ class _GraphScreenState extends State<GraphScreen> {
     );
   }
 
-  void _requestApproval(AppUser user) {
-    showDialog(
+  Future<bool> _showApprovalDialog(Map<String, dynamic> user) async {
+    return await showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Colors.grey[900],
         title: Text("Approval Required", style: TextStyle(color: Colors.white)),
-        content: Text(
-          "Invite ${user.name}? One of your 1st-degree friends needs to approve.",
-          style: TextStyle(color: Colors.white70),
-        ),
+        content: Text("Invite ${user['name']}? One of your 1st-degree friends needs to approve.", style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Cancel",
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel", style: TextStyle(color: Colors.redAccent)),
           ),
           ElevatedButton(
-            onPressed: () {
-              approvedCache.add(user.id);
-              Navigator.pop(context);
-              setState(() {});
-            },
-            child: const Text("Simulate Approval"),
-          ),
-
-          IconButton(
-            icon: const Icon(Icons.inbox_outlined, color: Colors.white),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const RequestsFeedScreen()),
-              );
-            },
-          ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Approve"),
+          )
         ],
       ),
     );
   }
 
-  void _showInviteDialog(AppUser user) {
+  void _showInviteDialog(Map<String, dynamic> user) {
     final TextEditingController messageController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Colors.grey[900],
-        title: Text(
-          "Invite ${user.name}",
-          style: const TextStyle(color: Colors.white),
-        ),
+        title: Text("Invite ${user['name']}", style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: messageController,
           maxLines: 3,
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white),
           decoration: InputDecoration(
-            hintText: "Say something (e.g., watch a movie)",
-            hintStyle: const TextStyle(color: Colors.white38),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            hintText: "e.g. Let's watch a movie",
+            hintStyle: TextStyle(color: Colors.white38),
             filled: true,
             fillColor: Colors.white10,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              "Cancel",
-              style: TextStyle(color: Colors.redAccent),
-            ),
+            child: const Text("Cancel", style: TextStyle(color: Colors.redAccent)),
           ),
           ElevatedButton(
-            onPressed: () {
-              mock_requests.hangoutRequests.add(
-                mock_requests.HangoutRequest(
-                  id: uuid.v4(),
-                  senderId: currentUser.id,
-                  receiverId: user.id,
-                  message: messageController.text,
-                  timestamp: DateTime.now(),
-                ),
-              );
+            onPressed: () async {
+              await ApiService.sendHangout({
+                'sender_id': userId,
+                'receiver_id': user['id'],
+                'message': messageController.text,
+              });
+              Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Invited ${user.name} to hang out!")),
+                SnackBar(content: Text("Invited ${user['name']} to hang out!")),
               );
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.greenAccent,
-            ),
             child: const Text("Send Invite"),
           ),
         ],
@@ -253,7 +189,6 @@ class _GraphScreenState extends State<GraphScreen> {
         title: const Text("Your Social Graph"),
         centerTitle: true,
       ),
-
       body: InteractiveViewer(
         constrained: false,
         boundaryMargin: const EdgeInsets.all(100),
@@ -273,6 +208,20 @@ class _GraphScreenState extends State<GraphScreen> {
             return node.key!.value as Widget;
           },
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.greenAccent,
+        child: const Icon(Icons.group_add, color: Colors.black),
+        onPressed: () {
+          Navigator.pushNamed(
+            context,
+            '/invite',
+            arguments: {
+              'hostId': userId,
+              'approvedFriends': approvedFriends,
+            },
+          );
+        },
       ),
     );
   }
