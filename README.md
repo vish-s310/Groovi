@@ -83,6 +83,8 @@ Type                                 Requirement
 3. 2nd-degree connections are updated dynamically using shortest path traversal in Neo4j.
 
 
+
+
 Contributors:
 
 sampagavi
