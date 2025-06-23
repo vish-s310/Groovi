@@ -20,7 +20,7 @@ Auth/OTP                 Terminal-based OTP Simulation
 Dev Tools                Git, Neo4j Browser, Android Studio, Swagger, Postman, Docker
 
     
-    Features
+ Features
      
      User Onboarding
      
@@ -67,19 +67,19 @@ Add optional description: "walk", "jam session", "watch a movie".
 Request is sent to selected users as a backend event with status pending.
 
 
- Mutual Approval Protocol
+ Mutual Approval Protocol:
  
 Type                                 Requirement
 1st-degree invite                    Direct invitation allowed.
 2nd-degree invite                    Requires 1st-degree friend to approve once.
 
 
-The approval gets stored in a separate approvals table and a CONNECTED_APPROVED edge in Neo4j.
+1. The approval gets stored in a separate approvals table and a CONNECTED_APPROVED edge in Neo4j.
 
 
-Once approved once, further requests to that 2nd-degree user do not need additional approvals.
+2. Once approved once, further requests to that 2nd-degree user do not need additional approvals.
 
 
-2nd-degree connections are updated dynamically using shortest path traversal in Neo4j.
+3. 2nd-degree connections are updated dynamically using shortest path traversal in Neo4j.
 
 
